@@ -1,3 +1,8 @@
+variable "aws_profile" {
+  description = "Which AWS profile is should be used? Defaults to \"default\""
+  default     = "default"
+}
+
 variable "allowed_cidr" {
   type        = "list"
   default     = ["0.0.0.0/0"]

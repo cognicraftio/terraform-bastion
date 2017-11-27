@@ -1,12 +1,29 @@
+data "aws_region" "current" {
+  current = true
+}
+
+data "aws_region" "provided" {
+  name = "${var.region}"
+}
+
+provider "aws" {
+  alias   = "provided"
+  profile = "${var.aws_profile}"
+  region  = "${var.region}"
+}
+
 data "aws_route53_zone" "zone" {
+  provider = "aws.provided"
   name = "${var.dns_zone}"
 }
 
 data "aws_vpc" "vpc" {
+  provider = "aws.provided"
   id = "${var.vpc_id}"
 }
 
 data "aws_subnet_ids" "public" {
+  provider = "aws.provided"
   vpc_id = "${data.aws_vpc.vpc.id}"
 
   tags {
@@ -15,6 +32,7 @@ data "aws_subnet_ids" "public" {
 }
 
 data "aws_subnet_ids" "private" {
+  provider = "aws.provided"
   vpc_id = "${data.aws_vpc.vpc.id}"
 
   tags {
@@ -23,6 +41,7 @@ data "aws_subnet_ids" "private" {
 }
 
 data "aws_ami" "bastion" {
+  provider    = "aws.provided"
   most_recent = true
   name_regex  = "^rk-bastion-\\d.+"
   owners      = ["self"]
@@ -41,6 +60,7 @@ data "template_file" "bastion_user_data" {
 }
 
 data "aws_iam_policy_document" "assume_role_ec2" {
+  provider = "aws.provided"
   statement {
     actions = ["sts:AssumeRole"]
 
@@ -52,6 +72,7 @@ data "aws_iam_policy_document" "assume_role_ec2" {
 }
 
 data "aws_iam_policy_document" "role_policy" {
+  provider = "aws.provided"
   statement {
     actions = [
       "ec2:DescribeAddresses",
@@ -66,11 +87,13 @@ data "aws_iam_policy_document" "role_policy" {
 
 # Since we *must* create an EIP, we do, but we don't attach it to the bastion
 resource "aws_eip" "bastion" {
+  provider = "aws.provided"
   vpc = true
 }
 
 # Publish DNS Record with Public IP
 resource "aws_route53_record" "bastion" {
+  provider = "aws.provided"
   count   = "${var.enable_eip ? 1 : 0}"
   zone_id = "${data.aws_route53_zone.zone.zone_id}"
   name    = "${var.hostname}.${data.aws_route53_zone.zone.name}"
@@ -80,22 +103,26 @@ resource "aws_route53_record" "bastion" {
 }
 
 resource "aws_iam_instance_profile" "bastion" {
+  provider = "aws.provided"
   name = "${var.hostname}.${data.aws_route53_zone.zone.name}"
   role = "${aws_iam_role.bastion.name}"
 }
 
 resource "aws_iam_role" "bastion" {
+  provider           = "aws.provided"
   name               = "${var.hostname}.${data.aws_route53_zone.zone.name}-bastion-role"
   path               = "/"
   assume_role_policy = "${data.aws_iam_policy_document.assume_role_ec2.json}"
 }
 
 resource "aws_iam_role_policy_attachment" "attach" {
+  provider   = "aws.provided"
   role       = "${aws_iam_role.bastion.name}"
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
 }
 
 resource "aws_iam_role_policy" "bastion" {
+  provider = "aws.provided"
   name   = "${var.env}-bastion-policy"
   role   = "${aws_iam_role.bastion.id}"
   policy = "${data.aws_iam_policy_document.role_policy.json}"
